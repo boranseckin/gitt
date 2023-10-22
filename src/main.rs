@@ -1,8 +1,6 @@
-use std::fs;
-use std::io::Read;
+use clap::{Parser, Subcommand, Args};
 
-use clap::{Parser, Subcommand};
-use flate2::read::ZlibDecoder;
+use gitar::{init_git_dir, parse_object_hash};
 
 #[derive(Parser)]
 struct Cli {
@@ -12,39 +10,39 @@ struct Cli {
 
 #[derive(Debug, Subcommand)]
 enum Command {
+    /// Create an empty Git repository
     Init,
+
+    /// Inspect a Git object
     CatFile {
-        #[arg(short = 'p')]
-        hash: String,
+        #[command(flatten)]
+        flags: CatFileFlags,
+
+        /// Indicates a Git object's hash
+        object: String,
     }
+}
+
+#[derive(Debug, Args)]
+#[group(required = true, multiple = false)]
+struct CatFileFlags {
+    /// Pretty print <object> content
+    #[arg(short, long)]
+    pretty_print: bool,
+
+    /// Show <object> type
+    #[arg(short = 't', long = "type")]
+    kind: bool,
 }
 
 fn main() {
     let cli = Cli::parse();
 
     match &cli.command {
-        Command::Init => { init_git_repo() },
-        Command::CatFile { hash } => { get_object_content(hash) },
+        Command::Init => { init_git_dir() },
+        Command::CatFile { object, flags: _ } => {
+            let _ = dbg!(parse_object_hash(object));
+        },
     }
 }
 
-fn init_git_repo() {
-    fs::create_dir(".git").unwrap();
-    fs::create_dir(".git/objects").unwrap();
-    fs::create_dir(".git/refs").unwrap();
-    fs::write(".git/HEAD", "ref: refs/heads/master\n").unwrap();
-    println!("Initialized git directory")
-}
-
-fn get_object_content(hash: &str) {
-    let object_path = format!("./.git/objects/{}/{}", &hash[0..2], &hash[2..]);
-    let object = fs::read(object_path).expect("object to exist");
-
-    let mut d = ZlibDecoder::new(object.as_slice());
-    let mut s = String::new();
-    d.read_to_string(&mut s).unwrap();
-
-    if let Some((_header, content)) = s.split_once('\0') {
-        print!("{content}");
-    }
-}
