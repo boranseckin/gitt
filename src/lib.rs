@@ -8,6 +8,8 @@ use std::fmt::Debug;
 use anyhow::{Result, Context, bail};
 use flate2::read::ZlibDecoder;
 
+type Hash = String;
+
 pub trait Object: Debug {}
 
 #[derive(Debug, Clone)]
@@ -19,7 +21,7 @@ impl Object for Blob {}
 
 #[derive(Debug, Clone)]
 struct Tree {
-    hash: String,
+    hash: Hash,
     unix_access_code: usize,
     file_name: String,
 }
@@ -29,7 +31,12 @@ impl Object for Vec<Tree> {}
 
 #[derive(Debug, Clone)]
 struct Commit {
-    content: String,
+    tree: Hash,
+    parent: Option<Hash>,
+    author: String,
+    committer: String,
+    gpgsig: Option<String>,
+    message: String,
 }
 
 impl Object for Commit{}
@@ -60,7 +67,7 @@ pub fn parse_object_hash(hash: &str) -> Result<Box<dyn Object>> {
     let header: Vec<u8> = buffer.by_ref().take_while(|c| {*c != b'\0'}).collect();
 
     let header = str::from_utf8(&header).context("failed to parse the header of the object as utf8")?;
-    let (kind, length) = parse_object_header(header).context("failed to parse header")?;
+    let (kind, _length) = parse_object_header(header).context("failed to parse header")?;
 
     match kind {
         "blob" => {
@@ -71,10 +78,57 @@ pub fn parse_object_hash(hash: &str) -> Result<Box<dyn Object>> {
             }))
         },
         "commit" => {
-            Ok(Box::new(Commit {
-                content: str::from_utf8(&buffer.collect::<Vec<u8>>())
+            let string = &buffer.collect::<Vec<u8>>();
+            let string = str::from_utf8(string)
                     .context("failed to parse the content of the object as utf8")?
-                    .to_string()
+                    .to_string();
+
+            let (metadata, message) = string.split_once("\n\n")
+                .context("commit message should be separated by a new line")?;
+            let message = message.trim().to_string();
+
+            let mut metadata = metadata.split('\n');
+
+            let mut tree = String::new();
+            let mut parent = None;
+            let mut author = String::new();
+            let mut committer = String::new();
+            let mut gpgsig = None;
+
+            while let Some(s) = metadata.next() {
+                let (kind, content) = s.split_once(' ').unwrap();
+                match kind {
+                    "tree" => {
+                        tree = content.to_string();
+                    },
+                    "parent" => {
+                        parent = Some(content.to_string());
+                    },
+                    "author" => {
+                        author = content.to_string();
+                    },
+                    "committer" => {
+                        committer = content.to_string();
+                    },
+                    "gpgsig" => {
+                        let mut content = content.to_string();
+                        let rest: String = metadata.by_ref().collect::<Vec<&str>>().join("\n");
+                        content.push_str(&rest);
+                        gpgsig = Some(content);
+                    },
+                    _ => {
+                        bail!("unknown commit metadata")
+                    }
+                }
+            }
+
+            Ok(Box::new(Commit {
+                tree,
+                parent,
+                author,
+                committer,
+                gpgsig,
+                message,
             }))
         },
         "tag" => {

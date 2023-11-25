@@ -41,7 +41,7 @@ fn main() {
     match &cli.command {
         Command::Init => { init_git_dir() },
         Command::CatFile { object, flags: _ } => {
-            let _ = dbg!("{:?}", parse_object_hash(object).unwrap());
+            let _ = dbg!(parse_object_hash(object).unwrap());
         },
     }
 }
