@@ -134,7 +134,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "gitar"
+name = "gitt"
 version = "0.1.0"
 dependencies = [
  "anyhow",

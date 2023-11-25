@@ -1,6 +1,6 @@
 use clap::{Parser, Subcommand, Args};
 
-use gitar::{init_git_dir, parse_object_hash};
+use gitt::{init_git_dir, parse_object_hash};
 
 #[derive(Parser)]
 struct Cli {
@@ -41,7 +41,7 @@ fn main() {
     match &cli.command {
         Command::Init => { init_git_dir() },
         Command::CatFile { object, flags: _ } => {
-            let _ = dbg!(parse_object_hash(object));
+            let _ = dbg!("{:?}", parse_object_hash(object).unwrap());
         },
     }
 }
