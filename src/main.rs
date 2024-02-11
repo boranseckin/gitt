@@ -1,4 +1,4 @@
-use clap::{Parser, Subcommand, Args};
+use clap::{Args, Parser, Subcommand};
 
 use gitt::{init_git_dir, parse_object_hash};
 
@@ -20,7 +20,7 @@ enum Command {
 
         /// Indicates a Git object's hash
         object: String,
-    }
+    },
 }
 
 #[derive(Debug, Args)]
@@ -39,10 +39,9 @@ fn main() {
     let cli = Cli::parse();
 
     match &cli.command {
-        Command::Init => { init_git_dir() },
+        Command::Init => init_git_dir(),
         Command::CatFile { object, flags: _ } => {
             let _ = dbg!(parse_object_hash(object).unwrap());
-        },
+        }
     }
 }
-
