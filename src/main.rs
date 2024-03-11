@@ -29,6 +29,7 @@ pub enum Command {
         /// Indicates a Git object's hash
         object_hash: String,
     },
+    /// Create a Git object
     HashObject {
         /// Write the object into the object database
         #[arg(short = 'w', long)]
@@ -36,6 +37,11 @@ pub enum Command {
 
         /// Path to the file to hash
         file: PathBuf,
+    },
+    /// List the contents of a Git tree object
+    LsTree {
+        /// Indicates a Git tree's hash
+        tree_hash: String,
     },
 }
 
@@ -49,6 +55,7 @@ fn main() -> anyhow::Result<()> {
             pretty_print,
         } => commands::cat_file::invoke(pretty_print, &object_hash),
         Command::HashObject { write, file } => commands::hash_object::invoke(write, &file),
+        Command::LsTree { tree_hash } => commands::ls_tree::invoke(&tree_hash),
     }?;
 
     Ok(())

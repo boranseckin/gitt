@@ -5,7 +5,7 @@ use anyhow::Context;
 use crate::object::{Kind, Object};
 
 pub(crate) fn invoke(write: bool, file: &PathBuf) -> anyhow::Result<()> {
-    let file = fs::read_to_string(file).context("reading file")?;
+    let file = fs::read(file).context("reading file")?;
 
     let object = Object {
         kind: Kind::Blob,

@@ -1,5 +1,5 @@
 use std::fmt::Display;
-use std::io::{BufWriter, Read, Write};
+use std::io::{BufRead, BufWriter, Cursor, Read, Write};
 use std::{fs, str::FromStr};
 
 use anyhow::Context;
@@ -8,7 +8,7 @@ use flate2::write::ZlibEncoder;
 use flate2::Compression;
 use sha1::{Digest, Sha1};
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub(crate) enum Kind {
     Blob,
     Tree,
@@ -42,7 +42,7 @@ impl FromStr for Kind {
 pub(crate) struct Object {
     pub(crate) kind: Kind,
     pub(crate) size: usize,
-    pub(crate) content: String,
+    pub(crate) content: Vec<u8>,
 }
 
 impl Object {
@@ -52,32 +52,44 @@ impl Object {
         let object = fs::read(object_path).context("failed to read the object")?;
 
         let mut decoder = ZlibDecoder::new(object.as_slice());
-        let mut buffer = String::new();
+        let mut buffer = Vec::new();
         decoder
-            .read_to_string(&mut buffer)
+            .read_to_end(&mut buffer)
             .context("failed to decompress the object")?;
 
-        let (header, content) = buffer
-            .split_once('\0')
-            .context("failed to split the header")?;
+        // Split the header from the content by finding the first null byte
+        let mut reader = Cursor::new(buffer);
+        let mut header = Vec::new();
+        reader
+            .read_until(b'\0', &mut header)
+            .context("failed to read the header")?;
+        header.pop(); // Remove the null byte
+        let header = std::str::from_utf8(&header).context("failed to parse the header")?;
 
         let (kind, size) = header
             .split_once(' ')
             .context("failed to parse the header")?;
+
         let kind = Kind::from_str(kind).context("failed to parse the kind")?;
         let size: usize = size.parse().context("failed to parse the size")?;
+
+        let mut content = Vec::new();
+        reader
+            .read_to_end(&mut content)
+            .context("failed to read the content")?;
 
         Ok(Self {
             kind,
             size,
-            content: content.to_string(),
+            content,
         })
     }
 
     pub(crate) fn write(&self, writer: impl Write) -> anyhow::Result<String> {
         let mut object: Vec<u8> = Vec::new();
-        write!(object, "{} {}\0{}", self.kind, self.size, self.content)
-            .context("failed to write the object")?;
+        write!(object, "{} {}\0", self.kind, self.size)
+            .context("failed to write the object header")?;
+        object.extend(&self.content);
         let mut encoder = ZlibEncoder::new(Vec::new(), Compression::default());
         encoder
             .write_all(&object)
