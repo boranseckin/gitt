@@ -1,47 +1,55 @@
-use clap::{Args, Parser, Subcommand};
+use std::path::PathBuf;
 
-use gitt::{init_git_dir, parse_object_hash};
+use clap::{Parser, Subcommand};
 
-#[derive(Parser)]
-struct Cli {
+mod commands;
+mod object;
+
+#[derive(Debug, Parser)]
+#[command(version, about)]
+pub struct Args {
     #[command(subcommand)]
-    command: Command,
+    pub command: Command,
 }
 
 #[derive(Debug, Subcommand)]
-enum Command {
-    /// Create an empty Git repository
-    Init,
-
+pub enum Command {
+    /// Initialize an empty Git repository
+    Init {
+        /// Force the creation of a new Git repository (will overwrite the current one)
+        #[arg(short, long)]
+        force: bool,
+    },
     /// Inspect a Git object
     CatFile {
-        #[command(flatten)]
-        flags: CatFileFlags,
+        /// Pretty-print the object
+        #[arg(short = 'p', long)]
+        pretty_print: bool,
 
         /// Indicates a Git object's hash
-        object: String,
+        object_hash: String,
+    },
+    HashObject {
+        /// Write the object into the object database
+        #[arg(short = 'w', long)]
+        write: bool,
+
+        /// Path to the file to hash
+        file: PathBuf,
     },
 }
 
-#[derive(Debug, Args)]
-#[group(required = true, multiple = false)]
-struct CatFileFlags {
-    /// Pretty print <object> content
-    #[arg(short, long)]
-    pretty_print: bool,
+fn main() -> anyhow::Result<()> {
+    let args = Args::parse();
 
-    /// Show <object> type
-    #[arg(short = 't', long = "type")]
-    kind: bool,
-}
+    match args.command {
+        Command::Init { force } => commands::init::invoke(force),
+        Command::CatFile {
+            object_hash,
+            pretty_print,
+        } => commands::cat_file::invoke(pretty_print, &object_hash),
+        Command::HashObject { write, file } => commands::hash_object::invoke(write, &file),
+    }?;
 
-fn main() {
-    let cli = Cli::parse();
-
-    match &cli.command {
-        Command::Init => init_git_dir(),
-        Command::CatFile { object, flags: _ } => {
-            let _ = dbg!(parse_object_hash(object).unwrap());
-        }
-    }
+    Ok(())
 }
