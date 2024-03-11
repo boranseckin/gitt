@@ -75,22 +75,23 @@ impl Object {
     }
 
     pub(crate) fn write(&self, writer: impl Write) -> anyhow::Result<String> {
-        let mut vec: Vec<u8> = Vec::new();
-        write!(vec, "{} {}\0{}", self.kind, self.size, self.content)
+        let mut object: Vec<u8> = Vec::new();
+        write!(object, "{} {}\0{}", self.kind, self.size, self.content)
             .context("failed to write the object")?;
         let mut encoder = ZlibEncoder::new(Vec::new(), Compression::default());
         encoder
-            .write_all(&vec)
+            .write_all(&object)
             .context("failed to compress object")?;
-        let object = encoder.finish().context("failed to finish compression")?;
+        let compressed = encoder.finish().context("failed to finish compression")?;
 
         let mut writer = BufWriter::new(writer);
         writer
-            .write_all(&object)
+            .write_all(&compressed)
             .context("failed to write the object")?;
 
         let mut hasher = Sha1::new();
-        hasher.update(&vec);
+        // Hash is computed over the uncompressed content including the header
+        hasher.update(&object);
         let hash = hasher.finalize();
 
         Ok(hex::encode(hash))
