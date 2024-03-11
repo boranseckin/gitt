@@ -1,5 +1,5 @@
 use std::fmt::Display;
-use std::io::{BufRead, BufWriter, Cursor, Read, Write};
+use std::io::{BufRead, Cursor, Read, Write};
 use std::{fs, str::FromStr};
 
 use anyhow::Context;
@@ -86,26 +86,45 @@ impl Object {
     }
 
     pub(crate) fn write(&self, writer: impl Write) -> anyhow::Result<String> {
-        let mut object: Vec<u8> = Vec::new();
-        write!(object, "{} {}\0", self.kind, self.size)
+        let encoder = ZlibEncoder::new(writer, Compression::default());
+
+        let mut writer = HashWriter {
+            hasher: Sha1::new(),
+            writer: encoder,
+        };
+
+        write!(writer, "{} {}\0", self.kind, self.size)
             .context("failed to write the object header")?;
-        object.extend(&self.content);
-        let mut encoder = ZlibEncoder::new(Vec::new(), Compression::default());
-        encoder
-            .write_all(&object)
-            .context("failed to compress object")?;
-        let compressed = encoder.finish().context("failed to finish compression")?;
-
-        let mut writer = BufWriter::new(writer);
         writer
-            .write_all(&compressed)
-            .context("failed to write the object")?;
+            .write_all(&self.content)
+            .context("failed to write the object content")?;
 
-        let mut hasher = Sha1::new();
-        // Hash is computed over the uncompressed content including the header
-        hasher.update(&object);
-        let hash = hasher.finalize();
+        writer
+            .writer
+            .finish()
+            .context("failed to finish compression")?;
+
+        let hash = writer.hasher.finalize();
 
         Ok(hex::encode(hash))
+    }
+}
+
+/// A wrapper around a writer that computes the SHA-1 hash of the written data
+/// and writes the data to the underlying writer.
+struct HashWriter<W> {
+    hasher: Sha1,
+    writer: W,
+}
+
+impl<W: Write> Write for HashWriter<W> {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        let n = self.writer.write(buf)?;
+        self.hasher.update(&buf[..n]);
+        Ok(n)
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        self.writer.flush()
     }
 }
