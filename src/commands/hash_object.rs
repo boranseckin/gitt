@@ -5,6 +5,7 @@ use anyhow::Context;
 use crate::object::{Kind, Object};
 
 pub(crate) fn invoke(write: bool, file: &PathBuf) -> anyhow::Result<()> {
+    // Read the file into memory as bytes
     let file = fs::read(file).context("reading file")?;
 
     let object = Object {
@@ -14,9 +15,11 @@ pub(crate) fn invoke(write: bool, file: &PathBuf) -> anyhow::Result<()> {
     };
 
     let hash = if write {
-        let writer = fs::File::create("temporary")?;
-        let hash = object.write(writer)?;
+        // Write the object into a temporary file to compute its hash
+        let writer = fs::File::create("temporary").context("failed to crate a temporary file")?;
+        let hash = object.write(writer).context("failed to write object")?;
 
+        // Move the temporary file to the object database
         fs::create_dir_all(format!(".git/objects/{}/", &hash[..2]))
             .context("failed to create subdir")?;
         fs::rename(
@@ -27,10 +30,11 @@ pub(crate) fn invoke(write: bool, file: &PathBuf) -> anyhow::Result<()> {
 
         hash
     } else {
+        // Use io::sink() to discard the output and only get the hash
         object.write(std::io::sink())?
     };
 
-    println!("{}", hash);
+    println!("{hash}");
 
     Ok(())
 }
