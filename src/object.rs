@@ -1,6 +1,7 @@
 use std::fmt::Display;
-use std::io::{BufRead, Cursor, Read, Write};
-use std::{fs, str::FromStr};
+use std::fs;
+use std::io::{self, BufRead, BufReader, Read, Write};
+use std::str::FromStr;
 
 use anyhow::Context;
 use flate2::read::ZlibDecoder;
@@ -39,28 +40,22 @@ impl FromStr for Kind {
 }
 
 #[derive(Debug)]
-pub(crate) struct Object {
+pub(crate) struct Object<R> {
     pub(crate) kind: Kind,
     pub(crate) size: usize,
-    pub(crate) content: Vec<u8>,
+    pub(crate) content: R,
 }
 
-impl Object {
-    pub(crate) fn read(hash: &str) -> anyhow::Result<Self> {
+impl Object<()> {
+    pub(crate) fn read(hash: &str) -> anyhow::Result<Object<impl BufRead>> {
         let object_path = format!("./.git/objects/{}/{}", &hash[..2], &hash[2..]);
 
-        // TODO: Implement reader instead of reading the whole file into memory
-        let object = fs::read(object_path).context("failed to read the object")?;
+        let file = fs::File::open(object_path).context("failed to open the object file")?;
 
-        let mut decoder = ZlibDecoder::new(object.as_slice());
-        let mut buffer = Vec::new();
-        decoder
-            .read_to_end(&mut buffer)
-            .context("failed to decompress the object")?;
-
-        // Split the header from the content by finding the first null byte
-        let mut reader = Cursor::new(buffer);
+        let decoder = ZlibDecoder::new(file);
+        let mut reader = BufReader::new(decoder);
         let mut header = Vec::new();
+
         reader
             .read_until(b'\0', &mut header)
             .context("failed to read the header")?;
@@ -74,19 +69,19 @@ impl Object {
         let kind = Kind::from_str(kind).context("failed to parse the kind")?;
         let size: usize = size.parse().context("failed to parse the size")?;
 
-        let mut content = Vec::new();
-        reader
-            .read_to_end(&mut content)
-            .context("failed to read the content")?;
-
-        Ok(Self {
+        Ok(Object {
             kind,
             size,
-            content,
+            content: reader,
         })
     }
+}
 
-    pub(crate) fn write(&self, writer: impl Write) -> anyhow::Result<String> {
+impl<R> Object<R>
+where
+    R: Read,
+{
+    pub(crate) fn write(&mut self, writer: impl Write) -> anyhow::Result<String> {
         let encoder = ZlibEncoder::new(writer, Compression::default());
 
         let mut writer = HashWriter {
@@ -96,9 +91,7 @@ impl Object {
 
         write!(writer, "{} {}\0", self.kind, self.size)
             .context("failed to write the object header")?;
-        writer
-            .write_all(&self.content)
-            .context("failed to write the object content")?;
+        io::copy(&mut self.content, &mut writer)?;
 
         writer
             .writer

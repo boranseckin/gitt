@@ -1,11 +1,11 @@
-use std::io::{BufRead, Cursor, Read, Write};
+use std::io::{BufRead, Read, Write};
 
 use anyhow::Context;
 
 use crate::object::{Kind, Object};
 
 pub(crate) fn invoke(tree_hash: &str) -> anyhow::Result<()> {
-    let tree_object = Object::read(tree_hash).context("failed to read tree object")?;
+    let mut tree_object = Object::read(tree_hash).context("failed to read tree object")?;
 
     if tree_object.kind != Kind::Tree {
         anyhow::bail!("not a tree object: {}", tree_hash);
@@ -19,7 +19,6 @@ pub(crate) fn invoke(tree_hash: &str) -> anyhow::Result<()> {
      * <mode> <name>\0<20_byte_sha>
      */
 
-    let mut reader = Cursor::new(tree_object.content);
     let mut buf = Vec::new();
     let mut hashbuf = [0u8; 20];
 
@@ -29,7 +28,8 @@ pub(crate) fn invoke(tree_hash: &str) -> anyhow::Result<()> {
         buf.clear();
 
         // Read mode and name (including the null byte)
-        let n = reader
+        let n = tree_object
+            .content
             .read_until(b'\0', &mut buf)
             .context("failed to read header")?;
 
@@ -39,7 +39,8 @@ pub(crate) fn invoke(tree_hash: &str) -> anyhow::Result<()> {
         }
 
         // Read 20-byte hash
-        reader
+        tree_object
+            .content
             .read_exact(&mut hashbuf)
             .context("failed to read object hash")?;
 

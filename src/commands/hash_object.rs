@@ -1,4 +1,4 @@
-use std::{fs, path::PathBuf};
+use std::{fs, os::unix::fs::MetadataExt, path::PathBuf};
 
 use anyhow::Context;
 
@@ -6,16 +6,19 @@ use crate::object::{Kind, Object};
 
 pub(crate) fn invoke(write: bool, file: &PathBuf) -> anyhow::Result<()> {
     // Read the file into memory as bytes
-    let file = fs::read(file).context("reading file")?;
+    let file = fs::File::open(file).context("opening file")?;
+    let meta = file.metadata().context("getting file metadata")?;
+    let size = meta.size();
 
-    let object = Object {
+    let mut object = Object {
         kind: Kind::Blob,
-        size: file.len(),
+        size: size as usize,
         content: file,
     };
 
     let hash = if write {
         // Write the object into a temporary file to compute its hash
+        // TODO: use better temporary file handling
         let writer = fs::File::create("temporary").context("failed to crate a temporary file")?;
         let hash = object.write(writer).context("failed to write object")?;
 
