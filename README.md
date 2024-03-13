@@ -1,2 +1,2 @@
 # gitt
-A partial git implementation
+A partial implementation of git

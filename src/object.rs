@@ -48,7 +48,8 @@ pub(crate) struct Object {
 impl Object {
     pub(crate) fn read(hash: &str) -> anyhow::Result<Self> {
         let object_path = format!("./.git/objects/{}/{}", &hash[..2], &hash[2..]);
-        // TODO: Implement reader
+
+        // TODO: Implement reader instead of reading the whole file into memory
         let object = fs::read(object_path).context("failed to read the object")?;
 
         let mut decoder = ZlibDecoder::new(object.as_slice());
