@@ -9,6 +9,8 @@ use flate2::write::ZlibEncoder;
 use flate2::Compression;
 use sha1::{Digest, Sha1};
 
+pub(crate) type Hash = [u8; 20];
+
 #[derive(Debug, PartialEq, Eq)]
 pub(crate) enum Kind {
     Blob,
@@ -81,7 +83,7 @@ impl<R> Object<R>
 where
     R: Read,
 {
-    pub(crate) fn write(&mut self, writer: impl Write) -> anyhow::Result<String> {
+    pub(crate) fn write(&mut self, writer: impl Write) -> anyhow::Result<Hash> {
         let encoder = ZlibEncoder::new(writer, Compression::default());
 
         let mut writer = HashWriter {
@@ -100,7 +102,7 @@ where
 
         let hash = writer.hasher.finalize();
 
-        Ok(hex::encode(hash))
+        Ok(hash.into())
     }
 }
 

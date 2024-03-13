@@ -21,6 +21,7 @@ pub(crate) fn invoke(write: bool, file: &PathBuf) -> anyhow::Result<()> {
         // TODO: use better temporary file handling
         let writer = fs::File::create("temporary").context("failed to crate a temporary file")?;
         let hash = object.write(writer).context("failed to write object")?;
+        let hash = hex::encode(hash);
 
         // Move the temporary file to the object database
         fs::create_dir_all(format!(".git/objects/{}/", &hash[..2]))
@@ -34,7 +35,8 @@ pub(crate) fn invoke(write: bool, file: &PathBuf) -> anyhow::Result<()> {
         hash
     } else {
         // Use io::sink() to discard the output and only get the hash
-        object.write(std::io::sink())?
+        let hash = object.write(std::io::sink())?;
+        hex::encode(hash)
     };
 
     println!("{hash}");
