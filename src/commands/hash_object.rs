@@ -9,7 +9,7 @@ pub(crate) fn invoke(write: bool, file: &PathBuf) -> anyhow::Result<()> {
     let meta = file.metadata().context("getting file metadata")?;
     let size = meta.size();
 
-    let mut object = Object {
+    let object = Object {
         kind: Kind::Blob,
         size: size.try_into().context("failed to convert u64 to usize")?,
         content: file,

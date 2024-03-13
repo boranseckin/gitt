@@ -83,7 +83,9 @@ impl<R> Object<R>
 where
     R: Read,
 {
-    pub(crate) fn write(&mut self, writer: impl Write) -> anyhow::Result<Hash> {
+    /// Write the object to the given writer and return the SHA-1 hash of the object.
+    /// Since the object content is exhausted after writing, this method consumes the object.
+    pub(crate) fn write(mut self, writer: impl Write) -> anyhow::Result<Hash> {
         let encoder = ZlibEncoder::new(writer, Compression::default());
 
         let mut writer = HashWriter {
@@ -105,7 +107,9 @@ where
         Ok(hash.into())
     }
 
-    pub(crate) fn write_to_objects(&mut self) -> anyhow::Result<Hash> {
+    /// Write the object to the object database and return the SHA-1 hash of the object.
+    /// Since the object content is exhausted after writing, this method consumes the object.
+    pub(crate) fn write_to_objects(self) -> anyhow::Result<Hash> {
         let writer = fs::File::create("temporary").context("failed to crate a temporary file")?;
         let hash_bytes = self.write(writer).context("failed to write object")?;
         let hash = hex::encode(hash_bytes);
