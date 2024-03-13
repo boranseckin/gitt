@@ -12,7 +12,7 @@ pub(crate) fn invoke(write: bool, file: &PathBuf) -> anyhow::Result<()> {
 
     let mut object = Object {
         kind: Kind::Blob,
-        size: size as usize,
+        size: size.try_into().context("failed to convert u64 to usize")?,
         content: file,
     };
 
