@@ -104,6 +104,23 @@ where
 
         Ok(hash.into())
     }
+
+    pub(crate) fn write_to_objects(&mut self) -> anyhow::Result<Hash> {
+        let writer = fs::File::create("temporary").context("failed to crate a temporary file")?;
+        let hash_bytes = self.write(writer).context("failed to write object")?;
+        let hash = hex::encode(hash_bytes);
+
+        // Move the temporary file to the object database
+        fs::create_dir_all(format!(".git/objects/{}/", &hash[..2]))
+            .context("failed to create subdir")?;
+        fs::rename(
+            "temporary",
+            format!(".git/objects/{}/{}", &hash[..2], &hash[2..]),
+        )
+        .context("failed to move temporary object")?;
+
+        Ok(hash_bytes)
+    }
 }
 
 /// A wrapper around a writer that computes the SHA-1 hash of the written data
